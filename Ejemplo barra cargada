@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jan 17 09:33:53 2020
+
+@author: ubuntu
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+plt.style.use('seaborn-darkgrid')
+import pymc3 as pm
+print('Running on PyMC3 v{}'.format(pm.__version__))
+
+#Medidas de la barra:
+L, b, h = 5, 0.15, 0.3 #en [m]
+
+#Deflexión medida
+V_Medido = np.array([12.84, 13.12, 12.13, 12.19, 12.67])*1e-3 
+
+#Momentos estadísticos:
+mu_E = 30000 #Media del Modulo de Young [MPa]
+mu_p = 0.012 #Media de la Carga en [kN/m]
+
+sigma_E = 4500 #Desvio de la Media logarítmica [MPa]
+sigma_p = 0.05 * 0.012 #Desvio de la carga [kN/m]
+
+V_Medido = np.concatenate((np.mean(V_Medido)*np.random.randn(100), V_Medido))
+
+#Ratio Medida/Modelo:
+alpha = (5/32) * (1/V_Medido) * (mu_p * L**4)/(mu_E * b * h**3)
+
+alpha = np.concatenate((alpha, np.random.rand(100)))
+
+
+Modelo_Barra = pm.Model()
+
+with Modelo_Barra:
+    
+    E = pm.Normal('E',mu = mu_E, sigma = sigma_E)
+    p = pm.Normal('p', mu = mu_p, sigma = sigma_p)
+    
+#    #Momentos de la Flecha
+#    sigma_V = pm.Normal('sigma_V',sigma = 1)
+#    mu_V = (5/32) * (p * L**4)/(E * b * h**3)
+#    
+#    V_obs = pm.Normal('V_obs', mu = mu_V, sigma = sigma_V, observed = V_Medido)
+    
+
+    #V = pm.Uniform('V',lower = min(V_Medido), upper = max(V_Medido))
+    
+    #Media de la Variable Aleatoria Alpha
+    mu_alpha = (5/32) * (1/V_Medido) * (p * L**4)/(E * b * h**3)
+    sigma_alpha = pm.Normal('sigma_alpha', sigma = 1)
+    
+    #Variable Observada:
+    alpha_observado = pm.Normal('alpha_observado', mu = mu_alpha, sigma = sigma_alpha, observed = alpha)
+    
+map_estimate = pm.find_MAP(model = Modelo_Barra)
+
+print(map_estimate)
+
+
+with Modelo_Barra:
+
+    # instantiate sampler
+    step = pm.Slice()
+
+    # draw 5000 posterior samples
+    trace = pm.sample(100, step=step)
+
+pm.traceplot(trace)
